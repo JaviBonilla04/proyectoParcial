@@ -21,9 +21,8 @@ struct Uniforms {\r
   objectColor : vec3<f32>,\r
   time        : f32,\r
 \r
-  // TODO [TASK 11] – Wireframe toggle uploaded from main.ts each frame.\r
-  // 0 = normal shading,  1 = wireframe mode.\r
-  // Lives at byte offset 272 in the uniform buffer (uData32[68]).\r
+  // Wireframe toggle uploaded from main.ts each frame.\r
+  \r
   wireframe   : u32,\r
   _p2         : f32,\r
   _p3         : f32,\r
@@ -48,12 +47,8 @@ struct VSOut {\r
   @location(2) uv            : vec2<f32>,\r
   @location(3) gouraudColor  : vec3<f32>,\r
 \r
-  // TODO [TASK 11] – Barycentric coordinate for this vertex.\r
-  // Each vertex of a triangle gets one of: (1,0,0) (0,1,0) (0,0,1).\r
-  // The rasterizer interpolates these across the triangle so every\r
-  // fragment receives its own (α,β,γ) with α+β+γ = 1.\r
-  // A fragment is near an edge when any one of the three components\r
-  // is close to 0 — e.g. α≈0 means the fragment is near the v1-v2 edge.\r
+  // Barycentric coordinate for this vertex.\r
+  // Each vertex of a triangle gets one of: (1,0,0) (0,1,0) (0,0,1)\r
   @location(4) bary          : vec3<f32>,\r
 };\r
 \r
@@ -137,16 +132,6 @@ fn blinnPhongLighting(N: vec3<f32>, fragWorldPos: vec3<f32>) -> vec3<f32> {\r
   return (ambientC + diffuseC + specularC) * u.objectColor;\r
 }\r
 \r
-// TODO [TASK 11] – vs_main now receives vertex_index as a builtin so it can\r
-// assign a unique barycentric coordinate to each corner of every triangle.\r
-// vertex_index % 3 cycles through 0,1,2 for consecutive vertices:\r
-//   vertex 0 → bary = (1,0,0)\r
-//   vertex 1 → bary = (0,1,0)\r
-//   vertex 2 → bary = (0,0,1)\r
-// NOTE: this works perfectly for non-indexed draws (cube, sphere) where\r
-// vertices are laid out sequentially. For indexed OBJ draws, vertex_index\r
-// is the value from the index buffer (not the triangle-local position),\r
-// so bary assignment is approximate — visually acceptable for most meshes.\r
 @vertex\r
 fn vs_main(\r
   input: VSIn,\r
@@ -186,14 +171,6 @@ fn fs_main(input: VSOut) -> FSOut {\r
   let N = normalize(input.worldNormal);\r
   out.normal = vec4<f32>((N + vec3<f32>(1.0))*0.5, 1.0);\r
 \r
-  // TODO [TASK 11] – Wireframe mode: hidden surface removal is handled\r
-  // automatically by the depth buffer (depthCompare: "less" in the pipeline).\r
-  // Edge detection works by checking the minimum barycentric component:\r
-  //   min(α,β,γ) is large (≈0.33) at the triangle center\r
-  //   min(α,β,γ) approaches 0 near any edge\r
-  // Fragments where min > edgeWidth are interior → discard them.\r
-  // Fragments where min ≤ edgeWidth are on an edge → draw them in wireColor.\r
-\r
   if u.model_id == 4u {\r
     let edgeWidth = 0.02;  // adjust for thicker/thinner lines\r
     let minBary   = min(input.bary.x, min(input.bary.y, input.bary.z));\r
@@ -209,7 +186,7 @@ fn fs_main(input: VSOut) -> FSOut {\r
     return out;\r
   }\r
 \r
-  // ── Normal shading path (unchanged) ─────────────────────────────────────\r
+  // ── Normal shading path \r
   var color: vec3<f32>;\r
 \r
   switch u.model_id {\r
@@ -220,7 +197,7 @@ fn fs_main(input: VSOut) -> FSOut {\r
   }\r
   out.color = vec4<f32>(color, 1.0); \r
   return out;\r
-}`,t={add(e,t){return[e[0]+t[0],e[1]+t[1],e[2]+t[2]]},sub(e,t){return[e[0]-t[0],e[1]-t[1],e[2]-t[2]]},scale(e,t){return[e[0]*t,e[1]*t,e[2]*t]},dot(e,t){return e[0]*t[0]+e[1]*t[1]+e[2]*t[2]},cross(e,t){return[e[1]*t[2]-e[2]*t[1],e[2]*t[0]-e[0]*t[2],e[0]*t[1]-e[1]*t[0]]},normalize(e){let t=Math.hypot(e[0],e[1],e[2])||1;return[e[0]/t,e[1]/t,e[2]/t]}},n={identity(){return[0,0,0,1]},multiply(e,t){let[n,r,i,a]=e,[o,s,c,l]=t;return[a*o+n*l+r*c-i*s,a*s-n*c+r*l+i*o,a*c+n*s-r*o+i*l,a*l-n*o-r*s-i*c]},normalize(e){let t=Math.hypot(e[0],e[1],e[2],e[3])||1;return[e[0]/t,e[1]/t,e[2]/t,e[3]/t]},toMat4(e){let[t,n,r,i]=e,a=new Float32Array(16);return a[0]=1-2*n*n-2*r*r,a[1]=2*t*n+2*r*i,a[2]=2*t*r-2*n*i,a[3]=0,a[4]=2*t*n-2*r*i,a[5]=1-2*t*t-2*r*r,a[6]=2*n*r+2*t*i,a[7]=0,a[8]=2*t*r+2*n*i,a[9]=2*n*r-2*t*i,a[10]=1-2*t*t-2*n*n,a[11]=0,a[12]=0,a[13]=0,a[14]=0,a[15]=1,a},mapSphere(e,t){let n=e*e+t*t;if(n<=1)return[e,t,Math.sqrt(1-n)];{let r=Math.sqrt(n);return[e/r,t/r,0]}},computeRotation(e,r,i,a){let o=n.mapSphere(e,r),s=n.mapSphere(i,a),c=t.cross(o,s),l=t.dot(o,s);Math.sqrt(Math.max(0,1-l*l))*.5;let u=Math.acos(Math.min(1,l)),d=Math.sin(u/2),f=Math.cos(u/2);return n.normalize([c[0]*d,c[1]*d,c[2]*d,f])}},r={identity(){let e=new Float32Array(16);return e[0]=1,e[5]=1,e[10]=1,e[15]=1,e},multiply(e,t){let n=new Float32Array(16);for(let r=0;r<4;r++)for(let i=0;i<4;i++)n[r*4+i]=e[0+i]*t[r*4+0]+e[4+i]*t[r*4+1]+e[8+i]*t[r*4+2]+e[12+i]*t[r*4+3];return n},transpose(e){let t=new Float32Array(16);for(let n=0;n<4;n++)for(let r=0;r<4;r++)t[r*4+n]=e[n*4+r];return t},invert(e){let t=new Float32Array(16),n=e[0],i=e[1],a=e[2],o=e[3],s=e[4],c=e[5],l=e[6],u=e[7],d=e[8],f=e[9],p=e[10],m=e[11],h=e[12],g=e[13],_=e[14],v=e[15],y=n*c-i*s,b=n*l-a*s,x=n*u-o*s,S=i*l-a*c,C=i*u-o*c,w=a*u-o*l,T=d*g-f*h,E=d*_-p*h,D=d*v-m*h,O=f*_-p*g,k=f*v-m*g,A=p*v-m*_,j=y*A-b*k+x*O+S*D-C*E+w*T;return j?(j=1/j,t[0]=(c*A-l*k+u*O)*j,t[1]=(l*D-s*A-u*E)*j,t[2]=(s*k-c*D+u*T)*j,t[3]=(c*E-s*O-l*T)*j,t[4]=(a*k-i*A-o*O)*j,t[5]=(n*A-a*D+o*E)*j,t[6]=(i*D-n*k-o*T)*j,t[7]=(n*O-i*E+a*T)*j,t[8]=(g*w-_*C+v*S)*j,t[9]=(_*x-h*w-v*b)*j,t[10]=(h*C-g*x+v*y)*j,t[11]=(g*b-h*S-_*y)*j,t[12]=(p*C-f*w-m*S)*j,t[13]=(d*w-p*x+m*b)*j,t[14]=(f*x-d*C-m*y)*j,t[15]=(d*S-f*b+p*y)*j,t):r.identity()},normalMatrix(e){return r.transpose(r.invert(e))},translation(e,t,n){let i=r.identity();return i[12]=e,i[13]=t,i[14]=n,i},scaling(e,t,n){let i=r.identity();return i[0]=e,i[5]=t,i[10]=n,i},rotationX(e){let t=Math.cos(e),n=Math.sin(e),i=r.identity();return i[5]=t,i[6]=n,i[9]=-n,i[10]=t,i},rotationY(e){let t=Math.cos(e),n=Math.sin(e),i=r.identity();return i[0]=t,i[2]=-n,i[8]=n,i[10]=t,i},rotationZ(e){let t=Math.cos(e),n=Math.sin(e),i=r.identity();return i[0]=t,i[1]=n,i[4]=-n,i[5]=t,i},perspective(e,t,n,r){let i=1/Math.tan(e/2),a=new Float32Array(16);return a[0]=i/t,a[5]=i,a[10]=r/(n-r),a[11]=-1,a[14]=r*n/(n-r),a},lookAt(e,n,r){let i=t.normalize(t.sub(e,n)),a=t.normalize(t.cross(r,i)),o=t.cross(i,a),s=new Float32Array(16);return s[0]=a[0],s[4]=a[1],s[8]=a[2],s[12]=-t.dot(a,e),s[1]=o[0],s[5]=o[1],s[9]=o[2],s[13]=-t.dot(o,e),s[2]=i[0],s[6]=i[1],s[10]=i[2],s[14]=-t.dot(i,e),s[3]=0,s[7]=0,s[11]=0,s[15]=1,s}},i=class{position=[0,.8,6];yaw=-Math.PI/2;pitch=0;moveSpeed=3.5;turnSpeed=1.9;clampPitch(){let e=Math.PI/2-.01;this.pitch>e&&(this.pitch=e),this.pitch<-e&&(this.pitch=-e)}getForward(){let e=Math.cos(this.pitch);return t.normalize([Math.cos(this.yaw)*e,Math.sin(this.pitch),Math.sin(this.yaw)*e])}getViewMatrix(){let e=this.getForward(),n=t.add(this.position,e);return r.lookAt(this.position,n,[0,1,0])}update(e,n){e.has(`ArrowLeft`)&&(this.yaw-=this.turnSpeed*n),e.has(`ArrowRight`)&&(this.yaw+=this.turnSpeed*n),e.has(`ArrowUp`)&&(this.pitch+=this.turnSpeed*n),e.has(`ArrowDown`)&&(this.pitch-=this.turnSpeed*n),this.clampPitch();let r=this.getForward(),i=t.normalize(t.cross(r,[0,1,0])),a=[0,1,0],o=this.moveSpeed*n;e.has(`w`)&&(this.position=t.add(this.position,t.scale(r,o))),e.has(`s`)&&(this.position=t.add(this.position,t.scale(r,-o))),e.has(`a`)&&(this.position=t.add(this.position,t.scale(i,-o))),e.has(`d`)&&(this.position=t.add(this.position,t.scale(i,o))),e.has(`q`)&&(this.position=t.add(this.position,t.scale(a,-o))),e.has(`e`)&&(this.position=t.add(this.position,t.scale(a,o)))}},a={modelId:0,ambient:.12,diffuse:.75,specular:.6,shininess:32,lightX:3,lightY:4,lightZ:3,autoRotLight:!0,objectColor:`#4a9eff`,lightColor:`#ffffff`};function o(e){let t=parseInt(e.slice(1),16);return[(t>>16&255)/255,(t>>8&255)/255,(t&255)/255]}var s={0:`Flat: face normal derived from dpdx/dpdy — one colour per triangle, hard faceted edges.`,1:`Gouraud: lighting computed per vertex, interpolated across the face.`,2:`Phong: smooth normals interpolated per pixel, full lighting in fs_main.`,3:`Blinn-Phong: like Phong but uses half-vector H=normalize(L+V) for specular.`,4:`Wireframe: barycentric edge detection with hidden surface removal via back-face culling.`,5:`Normal Buffer: world-space normals encoded as RGB — R=X G=Y B=Z remapped [-1,1]→[0,1].`};function c(e,t){document.getElementById(`lightX`).value=e.toFixed(1),document.getElementById(`lightX-val`).textContent=e.toFixed(1),document.getElementById(`lightZ`).value=t.toFixed(1),document.getElementById(`lightZ-val`).textContent=t.toFixed(1)}function l(e,t,n,r,i,a){return`
+}`,t={add(e,t){return[e[0]+t[0],e[1]+t[1],e[2]+t[2]]},sub(e,t){return[e[0]-t[0],e[1]-t[1],e[2]-t[2]]},scale(e,t){return[e[0]*t,e[1]*t,e[2]*t]},dot(e,t){return e[0]*t[0]+e[1]*t[1]+e[2]*t[2]},cross(e,t){return[e[1]*t[2]-e[2]*t[1],e[2]*t[0]-e[0]*t[2],e[0]*t[1]-e[1]*t[0]]},normalize(e){let t=Math.hypot(e[0],e[1],e[2])||1;return[e[0]/t,e[1]/t,e[2]/t]}},n={identity(){return[0,0,0,1]},multiply(e,t){let[n,r,i,a]=e,[o,s,c,l]=t;return[a*o+n*l+r*c-i*s,a*s-n*c+r*l+i*o,a*c+n*s-r*o+i*l,a*l-n*o-r*s-i*c]},normalize(e){let t=Math.hypot(e[0],e[1],e[2],e[3])||1;return[e[0]/t,e[1]/t,e[2]/t,e[3]/t]},toMat4(e){let[t,n,r,i]=e,a=new Float32Array(16);return a[0]=1-2*n*n-2*r*r,a[1]=2*t*n+2*r*i,a[2]=2*t*r-2*n*i,a[3]=0,a[4]=2*t*n-2*r*i,a[5]=1-2*t*t-2*r*r,a[6]=2*n*r+2*t*i,a[7]=0,a[8]=2*t*r+2*n*i,a[9]=2*n*r-2*t*i,a[10]=1-2*t*t-2*n*n,a[11]=0,a[12]=0,a[13]=0,a[14]=0,a[15]=1,a},mapSphere(e,t){let n=e*e+t*t;if(n<=1)return[e,t,Math.sqrt(1-n)];{let r=Math.sqrt(n);return[e/r,t/r,0]}},computeRotation(e,r,i,a){let o=n.mapSphere(i,a),s=n.mapSphere(e,r),c=t.cross(o,s),l=t.dot(o,s);Math.sqrt(Math.max(0,1-l*l))*.5;let u=Math.acos(Math.min(1,l)),d=Math.sin(u/2),f=Math.cos(u/2);return n.normalize([c[0]*d,c[1]*d,c[2]*d,f])}},r={identity(){let e=new Float32Array(16);return e[0]=1,e[5]=1,e[10]=1,e[15]=1,e},multiply(e,t){let n=new Float32Array(16);for(let r=0;r<4;r++)for(let i=0;i<4;i++)n[r*4+i]=e[0+i]*t[r*4+0]+e[4+i]*t[r*4+1]+e[8+i]*t[r*4+2]+e[12+i]*t[r*4+3];return n},transpose(e){let t=new Float32Array(16);for(let n=0;n<4;n++)for(let r=0;r<4;r++)t[r*4+n]=e[n*4+r];return t},invert(e){let t=new Float32Array(16),n=e[0],i=e[1],a=e[2],o=e[3],s=e[4],c=e[5],l=e[6],u=e[7],d=e[8],f=e[9],p=e[10],m=e[11],h=e[12],g=e[13],_=e[14],v=e[15],y=n*c-i*s,b=n*l-a*s,x=n*u-o*s,S=i*l-a*c,C=i*u-o*c,w=a*u-o*l,T=d*g-f*h,E=d*_-p*h,D=d*v-m*h,O=f*_-p*g,k=f*v-m*g,A=p*v-m*_,j=y*A-b*k+x*O+S*D-C*E+w*T;return j?(j=1/j,t[0]=(c*A-l*k+u*O)*j,t[1]=(l*D-s*A-u*E)*j,t[2]=(s*k-c*D+u*T)*j,t[3]=(c*E-s*O-l*T)*j,t[4]=(a*k-i*A-o*O)*j,t[5]=(n*A-a*D+o*E)*j,t[6]=(i*D-n*k-o*T)*j,t[7]=(n*O-i*E+a*T)*j,t[8]=(g*w-_*C+v*S)*j,t[9]=(_*x-h*w-v*b)*j,t[10]=(h*C-g*x+v*y)*j,t[11]=(g*b-h*S-_*y)*j,t[12]=(p*C-f*w-m*S)*j,t[13]=(d*w-p*x+m*b)*j,t[14]=(f*x-d*C-m*y)*j,t[15]=(d*S-f*b+p*y)*j,t):r.identity()},normalMatrix(e){return r.transpose(r.invert(e))},translation(e,t,n){let i=r.identity();return i[12]=e,i[13]=t,i[14]=n,i},scaling(e,t,n){let i=r.identity();return i[0]=e,i[5]=t,i[10]=n,i},rotationX(e){let t=Math.cos(e),n=Math.sin(e),i=r.identity();return i[5]=t,i[6]=n,i[9]=-n,i[10]=t,i},rotationY(e){let t=Math.cos(e),n=Math.sin(e),i=r.identity();return i[0]=t,i[2]=-n,i[8]=n,i[10]=t,i},rotationZ(e){let t=Math.cos(e),n=Math.sin(e),i=r.identity();return i[0]=t,i[1]=n,i[4]=-n,i[5]=t,i},perspective(e,t,n,r){let i=1/Math.tan(e/2),a=new Float32Array(16);return a[0]=i/t,a[5]=i,a[10]=r/(n-r),a[11]=-1,a[14]=r*n/(n-r),a},lookAt(e,n,r){let i=t.normalize(t.sub(e,n)),a=t.normalize(t.cross(r,i)),o=t.cross(i,a),s=new Float32Array(16);return s[0]=a[0],s[4]=a[1],s[8]=a[2],s[12]=-t.dot(a,e),s[1]=o[0],s[5]=o[1],s[9]=o[2],s[13]=-t.dot(o,e),s[2]=i[0],s[6]=i[1],s[10]=i[2],s[14]=-t.dot(i,e),s[3]=0,s[7]=0,s[11]=0,s[15]=1,s}},i=class{position=[0,.8,6];yaw=-Math.PI/2;pitch=0;moveSpeed=3.5;turnSpeed=1.9;clampPitch(){let e=Math.PI/2-.01;this.pitch>e&&(this.pitch=e),this.pitch<-e&&(this.pitch=-e)}getForward(){let e=Math.cos(this.pitch);return t.normalize([Math.cos(this.yaw)*e,Math.sin(this.pitch),Math.sin(this.yaw)*e])}getViewMatrix(){let e=this.getForward(),n=t.add(this.position,e);return r.lookAt(this.position,n,[0,1,0])}update(e,n){e.has(`ArrowLeft`)&&(this.yaw-=this.turnSpeed*n),e.has(`ArrowRight`)&&(this.yaw+=this.turnSpeed*n),e.has(`ArrowUp`)&&(this.pitch+=this.turnSpeed*n),e.has(`ArrowDown`)&&(this.pitch-=this.turnSpeed*n),this.clampPitch();let r=this.getForward(),i=t.normalize(t.cross(r,[0,1,0])),a=[0,1,0],o=this.moveSpeed*n;e.has(`w`)&&(this.position=t.add(this.position,t.scale(r,o))),e.has(`s`)&&(this.position=t.add(this.position,t.scale(r,-o))),e.has(`a`)&&(this.position=t.add(this.position,t.scale(i,-o))),e.has(`d`)&&(this.position=t.add(this.position,t.scale(i,o))),e.has(`q`)&&(this.position=t.add(this.position,t.scale(a,-o))),e.has(`e`)&&(this.position=t.add(this.position,t.scale(a,o)))}},a={modelId:0,ambient:.12,diffuse:.75,specular:.6,shininess:32,lightX:3,lightY:4,lightZ:3,autoRotLight:!0,objectColor:`#4a9eff`,lightColor:`#ffffff`};function o(e){let t=parseInt(e.slice(1),16);return[(t>>16&255)/255,(t>>8&255)/255,(t&255)/255]}var s={0:`Flat: face normal derived from dpdx/dpdy — one colour per triangle, hard faceted edges.`,1:`Gouraud: lighting computed per vertex, interpolated across the face.`,2:`Phong: smooth normals interpolated per pixel, full lighting in fs_main.`,3:`Blinn-Phong: like Phong but uses half-vector H=normalize(L+V) for specular.`,4:`Wireframe: barycentric edge detection with hidden surface removal via back-face culling.`,5:`Normal Buffer: world-space normals encoded as RGB — R=X G=Y B=Z remapped [-1,1]→[0,1].`};function c(e,t){document.getElementById(`lightX`).value=e.toFixed(1),document.getElementById(`lightX-val`).textContent=e.toFixed(1),document.getElementById(`lightZ`).value=t.toFixed(1),document.getElementById(`lightZ-val`).textContent=t.toFixed(1)}function l(e,t,n,r,i,a){return`
   <div class="slider-row">
     <span class="slider-label">${t}</span>
     <input type="range" id="${e}" min="${n}" max="${r}" step="${i}" value="${a}">
