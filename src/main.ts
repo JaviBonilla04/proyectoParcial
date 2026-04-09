@@ -8,7 +8,8 @@ import type { Vec3 } from "./math";
 import { gui, hexToRgb, initGUI, updateLightDisplay } from "./gui";
 import { loadOBJ, computeNormals, type IndexedMesh } from "./OBJLoader";
 
-// ── WebGPU init ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+//  WebGPU init 
 if (!navigator.gpu) throw new Error("WebGPU not supported");
 
 const canvas = document.querySelector("#gfx-main") as HTMLCanvasElement;
@@ -21,7 +22,8 @@ const device = await adapter.requestDevice();
 const context = canvas.getContext("webgpu")!;
 const format  = navigator.gpu.getPreferredCanvasFormat();
 
-// ── Depth & normal textures ───────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────────────────────────────
+// Depth & normal textures 
 let depthTexture:  GPUTexture | null = null;
 let normalTexture: GPUTexture | null = null;
 
@@ -104,7 +106,7 @@ function generateSphere(stacks: number, slices: number): Float32Array {
   return new Float32Array(data);
 }
 
-// ── Mesh helpers ──────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 function buildVertexBuffer(shape: "cube" | "sphere"): { buf: GPUBuffer; count: number } {
   const data = shape === "cube" ? generateCube() : generateSphere(64, 64);
@@ -117,7 +119,6 @@ function buildVertexBuffer(shape: "cube" | "sphere"): { buf: GPUBuffer; count: n
 }
 
 // Expands an IndexedMesh into a flat non-indexed vertex buffer with bary coords.
-// Each triangle gets 3 dedicated vertices so bary = (1,0,0)(0,1,0)(0,0,1) is unambiguous.
 function buildOBJBuffers(mesh: IndexedMesh): { buf: GPUBuffer; count: number } {
   const triCount  = mesh.indices.length / 3;
   const flat      = new Float32Array(triCount * 3 * 11);
@@ -165,18 +166,11 @@ function computeMeshBounds(mesh: IndexedMesh): { cx: number; cy: number; cz: num
   return { cx, cy, cz, scale: 1 / (Math.sqrt(dx*dx+dy*dy+dz*dz)/2) };
 }
 
-// ── Active shape + GPU buffers ────────────────────────────────────────────────
 let activeShape: "cube" | "sphere" | "teapot" | "beacon" | "custom" = "cube";
 let meshModelMatrix: Float32Array = mat4.identity();
 let { buf: vertexBuffer, count: vertexCount } = buildVertexBuffer("cube");
 
 // ── Uniform buffer ────────────────────────────────────────────────────────────
-// Layout (byte offsets):
-//   0   mvp        mat4  64 B     64  model      mat4  64 B
-//   128 normalMat  mat4  64 B     192 lightPos   vec3+pad 16 B
-//   208 lightColor vec3+pad 16 B  224 Ka/Kd/Ks/n  16 B
-//   240 camPos+modelId  16 B      256 objectColor+time  16 B
-//   272 (unused padding to 288)
 const UNIFORM_SIZE = 288;
 
 const uniformBuffer = device.createBuffer({
@@ -221,14 +215,14 @@ const bindGroup = device.createBindGroup({
   entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
 });
 
-// ── Wireframe pipeline (depth compare: always, back-face cull = hidden surface removal) ──
+// ── Wireframe pipeline
 const wireframePipeline = device.createRenderPipeline({
   label:  "Wireframe Pipeline",
   layout: "auto",
   vertex:   { module: shader, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT] },
   fragment: { module: shader, entryPoint: "fs_main", targets: TWO_TARGETS },
   primitive:    { topology: "triangle-list", cullMode: "back" },
-  depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "always" },
+  depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less-equal" }, // cambio a las 12:22 jueves
 });
 
 const wireframeBindGroup = device.createBindGroup({
@@ -236,7 +230,33 @@ const wireframeBindGroup = device.createBindGroup({
   entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
 });
 
-// ── Shared OBJ load helper ────────────────────────────────────────────────────
+const depthPrepassPipeline = device.createRenderPipeline({
+  label:  "Depth Prepass Pipeline",
+  layout: "auto",
+  vertex:   { module: shader, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT] },
+  fragment: {
+    module: shader, entryPoint: "fs_main",
+    targets: [
+      { format,              writeMask: 0 },
+      { format: "rgba8unorm", writeMask: 0 },
+    ],
+  },
+  primitive:    { topology: "triangle-list", cullMode: "back" },
+  depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
+});
+
+const depthUniformBuffer = device.createBuffer({
+  size:  UNIFORM_SIZE,
+  usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+});
+
+const depthPrepassBindGroup = device.createBindGroup({
+  layout:  depthPrepassPipeline.getBindGroupLayout(0),
+  entries: [{ binding: 0, resource: { buffer: depthUniformBuffer } }],
+});
+
+// ──────────────────────────────────────────────────────
+// OBJ load
 async function loadAndUploadOBJ(
   url: string,
   modelMatrix: (mesh: IndexedMesh) => Float32Array,
@@ -250,6 +270,7 @@ async function loadAndUploadOBJ(
   ({ buf: vertexBuffer, count: vertexCount } = buildOBJBuffers(mesh));
   meshModelMatrix = modelMatrix(mesh);
   camera.position = [0, 0, camZ];
+  defaultCamZ = camZ;
 }
 
 // ── GUI ───────────────────────────────────────────────────────────────────────
@@ -264,13 +285,14 @@ initGUI(
       ({ buf: vertexBuffer, count: vertexCount } = buildVertexBuffer(shape));
       meshModelMatrix = mat4.identity();
       camera.position = [0, 0, 5];
+      defaultCamZ = 5.0;
       return;
     }
 
     if (shape === "teapot") {
       // Bounding box: center=[0.217,1.575,0], min=[-3,0,-2], max=[3.434,3.15,2.0]
       await loadAndUploadOBJ(
-        "/obj_models/teapot.obj",
+        "obj_models/teapot.obj",
         () => {
           const cx=0.217, cy=1.575, cz=0;
           const dx=6.434, dy=3.15, dz=4.0;
@@ -285,7 +307,7 @@ initGUI(
     if (shape === "beacon") {
       // Bounding sphere: center=[125,125,125], radius=125
       await loadAndUploadOBJ(
-        "/obj_models/KAUST_Beacon.obj",
+        "obj_models/KAUST_Beacon.obj",
         () => {
           const scale = 1 / 125;
           return mat4.multiply(mat4.scaling(scale,scale,scale), mat4.translation(-125,-125,-125));
@@ -295,7 +317,6 @@ initGUI(
     }
   },
 
-  // Custom file upload
   async file => {
     activeShape = "custom";
     const url = URL.createObjectURL(file);
@@ -307,18 +328,24 @@ initGUI(
       },
       2.5
     );
-    URL.revokeObjectURL(url); // free memory
+    URL.revokeObjectURL(url); 
   }
 );
 
-// ── Camera ────────────────────────────────────────────────────────────────────
+document.getElementById("reset-zoom-btn")!.addEventListener("click", () => {
+  camera.position[2] = defaultCamZ;
+});
+
+// ──────────────────────────────────────────────────────────────────────
+//  Camera 
 const camera = new Camera();
 camera.position = [0, 0, 5];
 const keys = new Set<string>();
 window.addEventListener("keydown", e => keys.add(e.key));
 window.addEventListener("keyup",   e => keys.delete(e.key));
 
-// ── Arcball (Task 4) — Algorithm 2 from Shoemake 1994 ────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
+// Arcball
 let arcLastRotation:    Quat = quat.identity(); // last_rotation
 let arcCurrentRotation: Quat = quat.identity(); // current_rotation
 let arcStartX = 0, arcStartY = 0;
@@ -356,7 +383,23 @@ canvas.addEventListener("mouseleave", () => {
   arcDragging        = false;
 });
 
-// ── Render loop ───────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────
+// Scroll zoom
+const ZOOM_MIN  = 0.5;   
+const ZOOM_MAX  = 20.0;  
+let defaultCamZ = 5.0;
+
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  // scrolling down (positive deltaY) zooms out → increase Z
+  camera.position[2] = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX,
+    camera.position[2] + e.deltaY * 0.005
+  ));
+}, { passive: false });
+
+
+// ─────────────────────────────────────────────────────────────────
+//  Render loop 
 let lastTime    = performance.now();
 const startTime = performance.now();
 
@@ -368,10 +411,18 @@ function frame(now: number) {
   camera.update(keys, dt);
 
   const aspect = canvas.width / canvas.height;
-  const proj   = mat4.perspective((60 * Math.PI) / 180, aspect, 0.1, 100);
+  //const proj   = mat4.perspective((60 * Math.PI) / 180, aspect, 0.1, 100);
   const view   = camera.getViewMatrix();
 
-  // Arcball rotation applied on top of the mesh's center/scale matrix
+  // Zoom logic
+  const camDist = camera.position[2];
+  const near    = Math.max(0.001, camDist * 0.01);
+  const far     = camDist + 10.0;
+
+  const proj = mat4.perspective((60 * Math.PI) / 180, aspect, near, far);
+
+
+  // Arcball 
   const arcRotation = quat.toMat4(quat.multiply(arcCurrentRotation, arcLastRotation));
   const model       = mat4.multiply(arcRotation, meshModelMatrix);
   const normM       = mat4.normalMatrix(model);
@@ -403,6 +454,36 @@ function frame(now: number) {
   const encoder = device.createCommandEncoder();
   const isWireframe = gui.modelId === 4;
 
+  if (isWireframe) {
+    uData32[63] = 0; // force flat shading — no discard in fs_main
+    device.queue.writeBuffer(depthUniformBuffer, 0, uArrayBuf);
+    uData32[63] = 4; // restore for main pass
+
+    const depthPass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: context.getCurrentTexture().createView(),
+          clearValue: { r: 0.08, g: 0.08, b: 0.12, a: 1 },
+          loadOp: "clear", storeOp: "store",
+        },
+        {
+          view: normalTexture!.createView(),
+          clearValue: { r: 0.5, g: 0.5, b: 1.0, a: 1 },
+          loadOp: "clear", storeOp: "store",
+        },
+      ],
+      depthStencilAttachment: {
+        view: depthTexture!.createView(),
+        depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store",
+      },
+    });
+    depthPass.setPipeline(depthPrepassPipeline);
+    depthPass.setBindGroup(0, depthPrepassBindGroup);
+    depthPass.setVertexBuffer(0, vertexBuffer);
+    depthPass.draw(vertexCount);
+    depthPass.end();
+  }
+
   const pass = encoder.beginRenderPass({
     colorAttachments: [
       {
@@ -421,7 +502,7 @@ function frame(now: number) {
     depthStencilAttachment: {
       view:            depthTexture!.createView(),
       depthClearValue: 1,
-      depthLoadOp:     "clear",
+      depthLoadOp:    isWireframe ? "load" : "clear",
       depthStoreOp:    "store",
     },
   });

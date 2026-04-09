@@ -1,4 +1,4 @@
-// Shared GUI state (read by the render loop in main.ts)
+// Shared GUI state
 export const gui = {
   modelId:      0,
   ambient:      0.12,
@@ -114,6 +114,13 @@ export function initGUI(
   </div>
 
   <div class="gui-hint">WASD/QE move · Arrows look · Drag to rotate</div>
+  <div class="gui-hint">WASD/QE move · Arrows look · Drag to rotate · Scroll to zoom</div>
+  <div class="gui-hint">WASD/QE move · Arrows look · Drag to rotate · Scroll to zoom</div>
+  <div style="margin-top:6px">
+    <button id="reset-zoom-btn" style="padding:3px 10px; font-size:12px; background:#444; border:none; border-radius:4px; color:#fff; cursor:pointer">
+      Reset Zoom
+    </button>
+  </div>
 </div>`;
   document.body.appendChild(overlay);
 

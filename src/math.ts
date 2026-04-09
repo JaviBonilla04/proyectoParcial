@@ -1,5 +1,5 @@
 export type Vec3 = [number, number, number];
-export type Mat4 = Float32Array; // column-major
+export type Mat4 = Float32Array; 
 
 export const vec3 = {
   add(a: Vec3, b: Vec3): Vec3 {
@@ -27,7 +27,6 @@ export const vec3 = {
   },
 };
 
-// TASK 4: create the quartenion functions
 export type Quat = [number, number, number, number];
 
 export const quat = {
@@ -88,8 +87,8 @@ export const quat = {
   },
 
   computeRotation(currX: number, currY: number, startX: number, startY: number): Quat {
-    const v0 = quat.mapSphere(currX, currY);
-    const v1 = quat.mapSphere(startX, startY);
+    const v0 = quat.mapSphere(startX, startY);
+    const v1 = quat.mapSphere(currX, currY);
     const axis = vec3.cross(v0, v1);
     const cosA = vec3.dot(v0, v1);
     const sinHalf = Math.sqrt(Math.max(0, 1-cosA*cosA))*0.5;

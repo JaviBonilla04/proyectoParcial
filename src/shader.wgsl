@@ -21,9 +21,8 @@ struct Uniforms {
   objectColor : vec3<f32>,
   time        : f32,
 
-  // TODO [TASK 11] – Wireframe toggle uploaded from main.ts each frame.
-  // 0 = normal shading,  1 = wireframe mode.
-  // Lives at byte offset 272 in the uniform buffer (uData32[68]).
+  // Wireframe toggle uploaded from main.ts each frame.
+  
   wireframe   : u32,
   _p2         : f32,
   _p3         : f32,
@@ -48,12 +47,8 @@ struct VSOut {
   @location(2) uv            : vec2<f32>,
   @location(3) gouraudColor  : vec3<f32>,
 
-  // TODO [TASK 11] – Barycentric coordinate for this vertex.
-  // Each vertex of a triangle gets one of: (1,0,0) (0,1,0) (0,0,1).
-  // The rasterizer interpolates these across the triangle so every
-  // fragment receives its own (α,β,γ) with α+β+γ = 1.
-  // A fragment is near an edge when any one of the three components
-  // is close to 0 — e.g. α≈0 means the fragment is near the v1-v2 edge.
+  // Barycentric coordinate for this vertex.
+  // Each vertex of a triangle gets one of: (1,0,0) (0,1,0) (0,0,1)
   @location(4) bary          : vec3<f32>,
 };
 
@@ -137,16 +132,6 @@ fn blinnPhongLighting(N: vec3<f32>, fragWorldPos: vec3<f32>) -> vec3<f32> {
   return (ambientC + diffuseC + specularC) * u.objectColor;
 }
 
-// TODO [TASK 11] – vs_main now receives vertex_index as a builtin so it can
-// assign a unique barycentric coordinate to each corner of every triangle.
-// vertex_index % 3 cycles through 0,1,2 for consecutive vertices:
-//   vertex 0 → bary = (1,0,0)
-//   vertex 1 → bary = (0,1,0)
-//   vertex 2 → bary = (0,0,1)
-// NOTE: this works perfectly for non-indexed draws (cube, sphere) where
-// vertices are laid out sequentially. For indexed OBJ draws, vertex_index
-// is the value from the index buffer (not the triangle-local position),
-// so bary assignment is approximate — visually acceptable for most meshes.
 @vertex
 fn vs_main(
   input: VSIn,
@@ -186,14 +171,6 @@ fn fs_main(input: VSOut) -> FSOut {
   let N = normalize(input.worldNormal);
   out.normal = vec4<f32>((N + vec3<f32>(1.0))*0.5, 1.0);
 
-  // TODO [TASK 11] – Wireframe mode: hidden surface removal is handled
-  // automatically by the depth buffer (depthCompare: "less" in the pipeline).
-  // Edge detection works by checking the minimum barycentric component:
-  //   min(α,β,γ) is large (≈0.33) at the triangle center
-  //   min(α,β,γ) approaches 0 near any edge
-  // Fragments where min > edgeWidth are interior → discard them.
-  // Fragments where min ≤ edgeWidth are on an edge → draw them in wireColor.
-
   if u.model_id == 4u {
     let edgeWidth = 0.02;  // adjust for thicker/thinner lines
     let minBary   = min(input.bary.x, min(input.bary.y, input.bary.z));
@@ -209,7 +186,7 @@ fn fs_main(input: VSOut) -> FSOut {
     return out;
   }
 
-  // ── Normal shading path (unchanged) ─────────────────────────────────────
+  // ── Normal shading path 
   var color: vec3<f32>;
 
   switch u.model_id {

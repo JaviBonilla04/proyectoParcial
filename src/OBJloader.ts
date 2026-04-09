@@ -1,8 +1,9 @@
-// ── OBJ Loader & Indexed Mesh Data Structure ─────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// OBJ Loader
 
-export interface IndexedMesh {  // was "IdexedMesh" — typo fixed
+export interface IndexedMesh {  
   positions : Float32Array;   // flat [x,y,z, x,y,z, ...]
-  normals   : Float32Array;   // flat [nx,ny,nz, ...] — filled by computeNormals()
+  normals   : Float32Array;   // flat [nx,ny,nz, ...] normales
   uvs       : Float32Array;   // flat [u,v, u,v, ...]
   indices   : Uint32Array;    // triangle indices [i0,i1,i2, ...]
 }
@@ -88,10 +89,8 @@ export async function loadOBJ(url: string): Promise<IndexedMesh> {
   };
 }
 
-// ── Per-face & vertex normal computation ─────────────────────────────────────
-// Step A: cross product of two edges gives face normal (area-weighted).
-// Step B: accumulate onto each vertex of the triangle.
-// Step C: normalize each vertex normal to unit length.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//  Per-face & vertex normal computation
 export function computeNormals(mesh: IndexedMesh): void {
   const { positions, indices } = mesh;
   const normals = new Float32Array(positions.length);
